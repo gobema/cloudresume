@@ -10,7 +10,7 @@ to an existing code base and adds my own feature to the backend.
 
 I have followed the model structure of the application and added a Review model along with some mock data and a test.
 The `reviews` table I created for reviews has a composite key consisting of foreign key IDs from the `users`
-and `snippets` tables. In turn, the `reviewUpdatePost` handler builds off the design of the other handlers requiring
+and `snippets` tables. Accordingly, the `reviewUpdatePost` handler builds off the design of the other handlers requiring
 both a user and snippet ID to execute.
 
 The `reviews` branch builds and runs. A user needs to be logged in to submit a review.
