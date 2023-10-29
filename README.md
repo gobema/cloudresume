@@ -14,3 +14,9 @@ and `snippets` tables. Accordingly, the `reviewUpdatePost` handler builds off th
 both a user and snippet ID to execute.
 
 The `reviews` branch builds and runs. A user needs to be logged in to submit a review.
+
+<div style="text-align: center;">
+
+![Screenshot](.github/reviews.png)
+
+</div>
