@@ -1,22 +1,23 @@
-# Reviews
+# Owner
 
-With the Snippetbox web application packaged and deployable, I can begin adding features.
+The `owner` branch introduces a small update to the `users` database table, but this update provides a major change in
+user experience. It allows me to create two types of users: reviewers and owners. Now I can control who can create
+posts, similar to a personal blog post, so as an owner, I can limit posts to sections of my résumé for review.
 
-The `reviews` branch adds a small feature that builds upon key parts of the code base.
-The [cloud resume challenge](https://cloudresumechallenge.dev/docs/the-challenge/aws/) describes a static website with a
-visitor counter to demonstrate interaction with a backend database. The Snippetbox design already includes a backend, so
-I have built upon that and added a review submission counter. This addition reflects the day-to-day work of contributing
-to an existing code base and adds my own feature to the backend.
+The objectives I want to achieve with this change:
 
-I have followed the model structure of the application and added a Review model along with some mock data and a test.
-The `reviews` table I created for reviews has a composite key consisting of foreign key IDs from the `users`
-and `snippets` tables. Accordingly, the `reviewUpdatePost` handler builds off the design of the other handlers requiring
-both a user and snippet ID to execute.
+* access to the signup page to create an owner during an initial deployment
+* access to the signup page by an owner to create reviewers
+* access to only the login page if not logged in
+* no access to the signup and create page by a reviewer
 
-The `reviews` branch builds and runs. A user needs to be logged in to submit a review.
+To implement this change, I needed to make several updates to the code base.
 
-<div style="text-align: center;">
+In the Users model, I added the `Owner` boolean and updated and created methods for the new feature. From here, I'm able
+to rely on the pattern of the authentication feature, so I backtracked down a path that is the core of web application
+design: middleware, routes, handlers, and helper functions to implement my new feature. The design of the Snippetbox
+code base facilitates these changes. Finally, I updated existing tests and mock data.
 
-![Screenshot](.github/reviews.png)
-
-</div>
+As with the `reviews` branch, the `owner` branch builds and runs. If you want to host your own cloud résumé based on
+this repository, the `owner` branch includes all the basic features that I wanted to add without any personal changes,
+which I will be adding to the branch `cloudresume`.
