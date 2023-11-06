@@ -1,7 +1,261 @@
 {{define "title"}}About{{end}}
 {{define "main"}}
     <h2>About</h2>
-    <p>
-        Peace and long life. 🖖
+    <p>My name is Mat Gonzales, and this is my riff on the <a
+                href='https://cloudresumechallenge.dev/docs/the-challenge/aws/'>cloud résumé challenge</a>.</p>
+
+    <p>When I first learned about the cloud résumé challenge, I realized it wasn&#39;t about my résumé but the tasks I
+        needed to complete. The only problem was, as defined, it didn&#39;t say much about me. So how could I challenge
+        myself and express to future team members what I&#39;m about?</p>
+
+    <p>I knew there were at least two concepts I wanted to convey.</p>
+
+    <p>First is that I could work with new tools, specifically tools that support Infrastructure as Code, so I decided
+        to use AWS CDK and GitHub Actions to deploy my cloud résumé. My previous experience has been with Puppet,
+        Jenkins, and Ansible. My goal was to show that tools come and go but commitment to Infrastructure as Code is
+        key.</p>
+
+    <p>Second, I wanted to emphasize the process of working with an existing code base to highlight that I am at heart a
+        team member who supports other team members. Every day there are tasks I feel I can help with. Whether it&#39;s
+        small tasks, new features, or humdrum technical debt, I can help, and to use a sports analogy, I enjoy making
+        the assist or even the &quot;secondary assist&quot;, the pass to the pass to the win.</p>
+
+    <p>I achieved this last goal by employing a web application, called Snippetbox, as a starting code base. It&#39;s
+        what you can create by the end of the book <a href='https://lets-go.alexedwards.net/'>Let&#39;s Go</a> by Alex
+        Edwards. I highly recommend it. You can view the code at this starting point on the <a
+                href='https://github.com/gobema/cloudresume/tree/base'><code>base</code></a> branch of the <code>cloudresume</code>
+        repo.</p>
+
+    <p>Beginning with a code base that runs a pastebin type web application, I added features to secure and personalize
+        it for submission as a cloud résumé.</p>
+
+    <p>Along the way, I set several goals for myself, such as workflows to deploy and destroy infrastructure
+        consistently, and as you&#39;ll see, that introduced some challenges.</p>
+
+    <br>
+
+    <h3 id='part-1-deploying-and-destroying-with-aws-cdk-and-github-actions'>Part 1: Deploying and Destroying with AWS
+        CDK and GitHub Actions</h3>
+
+    <h4 id='lets-deploy-and-destroy'>Let&#39;s deploy (and destroy)</h4>
+
+    <p>From the start, my goal with the infrastructure deployment was to reproducibly deploy and destroy from a <a
+                href='https://github.com/gobema/cloudresume-cdk'>single repository</a>. This workflow may not be common
+        in production, but I made it a requirement and challenge for my testing.</p>
+
+    <p>This is the first time I&#39;ve worked with GitHub Actions and AWS CDK and by extension TypeScript, but it turned
+        out fulfilling my requirement presented the most interesting challenge because of AWS.</p>
+
+    <p>Like many scary stories this one starts with DNS.</p>
+
+    <h4 id='its-always-dns'>It&#39;s always DNS</h4>
+
+
+    <p>To accomplish my requirement, I wanted a DNS stack to create a hosted zone for my domain and a certificate stack
+        to create an SSL/TLS certificate in AWS Certificate Manager.</p>
+
+    <p>I had already prototyped different infrastructure deployments with the basic components being VPC, RDS, and ECS
+        Fargate stacks. At this point, I was sold on AWS CDK. The code was concise and readable. Unlike other tools that
+        employ declarative configuration language, such as Terraform, Puppet, or even CloudFormation, and quickly become
+        sprawling, I was able to hold a mental model of what each stack created easily with CDK. I really only needed
+        the <a href='https://docs.aws.amazon.com/cdk/api/v2/docs/aws-construct-library.html'>API Reference</a>,
+        repositories in AWS organizations, such as <a href='https://github.com/aws-samples/'>AWS Samples</a>, <a
+                href='https://github.com/cdklabs/'>CDK Labs at AWS</a>, <a href='https://github.com/awslabs/'>Amazon Web
+            Services - Labs</a>, the <a href='https://github.com/aws/aws-cdk'>CDK repo</a>, and the <a
+                href='https://ecsworkshop.com/'>Amazon ECS Workshop</a> demos to write my initial stacks.</p>
+
+    <p>But when I added the DNS and certificate stacks, deployment stopped and destroying the infrastructure produced
+        the error:</p>
+
+    <pre><code>The specified hosted zone contains non-required resource record sets and so cannot be deleted.</code></pre>
+
+    <p>My first suspicions swirled around DNS, and I wasn&#39;t wrong. It&#39;s always DNS after all. Okay, maybe that&#39;s
+        not true. I was still considering certificate creation in ACM as a possible cause for both deploy and destroy
+        issues.</p>
+
+    <p>But a few <code>dig</code> commands, head scratches, and searches later, I came across a discussion about <a
+                href='https://stackoverflow.com/questions/37533568/new-domain-is-both-registered-with-and-hosted-at-aws-route-53-but-resolution-fai/37534217#37534217'>name
+            servers and Route 53</a>. If I&#39;m going to be testing by deploying and destroying infrastructure, the
+        name servers in the hosted zone and Route 53 domain registrar need to match, but Route 53 allocates a new set of
+        four name servers every time a new hosted zone is created, which is what the DNS stack was doing.</p>
+
+    <p>After verifying in the AWS Console that this was what was blocking deployment and suspecting this had to be a
+        problem others faced, I searched the repositories mentioned above for any use case involving hosted zones and
+        updating name servers, and I found an example of a <a
+                href='https://github.com/aws-samples/i-love-my-local-farmer/blob/main/MultiAccountDNS/lib/rootDomain/RootDomainStack.UpdateRegDomain.ts'>custom
+            resource</a> that does exactly this.</p>
+
+    <h4 id='custom-resources'>Custom Resources</h4>
+
+    <p>As you probably already know, unlike me at the time, AWS CDK code outputs to CloudFormation templates, and
+        CloudFormation executes the actual provisioning. CloudFormation stacks run basic create, update, and delete
+        operations. A CloudFormation custom resource allows us to create our own customized provisioning logic, the most
+        basic of which is an API call, such as <code>UpdateDomainNameservers</code>, used in the custom resource above.
     </p>
+
+    <p>In AWS CDK, a custom resource executes using a special Lambda function that must handle these three operation
+        types: create, update, and delete. As you see in the custom resource code above, the two create type operations
+        make the API call, and delete is simply returned, as this custom resource&#39;s purpose is to update or create a
+        resource.</p>
+
+    <p>With the addition of this custom resource to my DNS stack, I&#39;m now able to test deployment the way I set out
+        to, but there&#39;s still one more problem: the error I mentioned above. Something is blocking deletion of the
+        certificate stack. Is it DNS? Actually, it&#39;s <a
+                href='https://github.com/aws-cloudformation/cloudformation-coverage-roadmap/issues/837'>CloudFormation</a>.
+    </p>
+
+    <h4 id='my-own-custom-resource'>My own Custom Resource</h4>
+
+    <p>The error above points me to Route 53 where I learned that ACM creates a CNAME record for certificate validation
+        through <a href='https://docs.aws.amazon.com/acm/latest/userguide/dns-validation.html'>DNS</a>, which it does
+        not delete with a stack delete operation. This is known behavior that the CloudFormation team may or may not
+        change judging by the open ticket linked above. There have also been tickets created for it in the <a
+                href='https://github.com/aws/aws-cdk/issues/11201'>CDK repo</a>.</p>
+
+    <p>This time, however, I&#39;m facing this problem with custom resources in my toolkit, so inspired by <a
+                href='https://github.com/aws/aws-cdk/blob/main/packages/aws-cdk-lib/aws-route53/lib/delete-existing-record-set-handler/index.ts'>an
+            additional custom resource</a> in the CDK repo, I created a <a
+                href='https://github.com/gobema/cloudresume-cdk/blob/main/lib/cert-stack-delete.DeleteCertRecord.ts'>custom
+            resource</a> that handles the deletion operation for the certificate and simply returns the create and
+        update operations, as my custom resource&#39;s primary purpose is to delete a resource.</p>
+
+    <p>Granted my own first attempt at a custom resource is a little hacky since it relies on knowing that ACM creates a
+        CNAME record and that there&#39;s only one of them for my particular setup, but it does the job. This reminds me
+        that these quick fix solutions, which may even be antipatterns in some cases, is a topic that I&#39;m interested
+        in and enjoy talking about.</p>
+    <p>My entire stack deploys and destroys consistently now, but there are a few more thing I need to briefly
+        mention.</p>
+
+    <h4 id='build-status-inexpensive'>Build status: inexpensive</h4>
+
+    <p>The current stack in <code>main</code> deploys infrastructure that&#39;s pretty expensive to run and probably
+        overkill for a small web app. I mostly chose services I had never worked with before such as Fargate, Aurora,
+        and a VPC interface endpoint, but convenience and speed of the deploy and destroy runs were also a major factor.
+        I noticed significant increases in provisioning time when deploying a NAT gateway and RDS instance. You&#39;re
+        probably viewing this site now on infrastructure deployed from the <a
+                href='https://github.com/gobema/cloudresume-cdk/tree/noalb'><code>noalb</code></a> branch, which is
+        significantly less expensive for me to run but also deploys with AWS CDK and GitHub Actions.</p>
+
+    <p>Finally, a couple more minor updates: I added a parameter group in the RDS stack for utf8. I noticed while
+        testing that writes to the database were failing with <code>Incorrect string value</code> when using utf8. This
+        was made memorable by how straightforward it was to correct using CDK.</p>
+
+    <p>I&#39;d also like to highlight an update I made to GitHub Actions. I started testing using hardcoded AWS keys,
+        but inspired by this Stack Overflow <a
+                href='https://stackoverflow.com/questions/58643905/how-aws-credentials-works-at-github-actions/70229928#70229928'>post</a>
+        and this <a href='https://www.youtube.com/watch?v=mel6N62WZb0'>video</a>, I switched to using the <a
+                href='https://github.com/aws-actions/configure-aws-credentials'>configure-aws-credentials</a> action and
+        an IAM Role.</p>
+
+    <br>
+
+    <h3 id='part-2-building-a-cloud-résumé'>Part 2: Building a Cloud Résumé</h3>
+
+    <h3 id='lets-build'>Let&#39;s build</h3>
+
+    <p>The book <a href='https://lets-go.alexedwards.net/'>Let&#39;s Go</a> does not cover packaging and deployment.
+        Early on I knew that I wanted to run the web app as a container, so my first contribution to the app code base
+        was a Dockerfile and a GitHub Actions workflow to build a container.</p>
+
+    <p>With my Dockerfile, I follow a pattern I learned from building RPMs: configure the infrastructure and make the
+        package as minimal as possible. In the <a href='https://github.com/gobema/cloudresume/blob/main/Dockerfile'>Dockerfile</a>,
+        <code>CGO_ENABLED=0</code> turns off CGO to build without dynamic links, and <code>-ldflags=&#39;-w
+            -s&#39;</code> turns off debugging and analysis capabilities. Running <code>go build</code> with these will
+        ensure the binary is small and that it can run on the minimal image <code>scratch</code>. These settings build a
+        container image that is just below 8 MB. In addition, since I&#39;m using a multi stage build, I&#39;m able to
+        run basic unit tests in the build stage.</p>
+
+    <p>I also added database migrations to create the necessary database tables when a container is run, and I created
+        the <code>config</code> struct to hold database secrets and environment variables, which are created as part of
+        the <a href='https://github.com/gobema/cloudresume-cdk/blob/main/lib/rds-serverless-stack.ts'>infrastructure
+            deployment</a>.</p>
+
+    <p>I used the <a href='https://github.com/golang-migrate/migrate'>Golang migrate</a> tool for these migrations and
+        ran into two issues. The first was working with the SQL files embedded. It isn&#39;t very well-documented, but
+        after digging into the migrate repo, I found the package <a
+                href='https://github.com/golang-migrate/migrate/tree/master/source/iofs'>iofs</a> that I could use with
+        embedded files. The second issue came up while verifying deployment with multiple containers. As this <a
+                href='https://github.com/golang-migrate/migrate/issues/100'>ticket</a> states, the
+        <code>Migrate.Up</code> method returns an error if migration state is unchanged. My solution to this was to
+        catch and log the error to INFO.</p>
+
+    <p>You can view these changes in the <a
+                href='https://github.com/gobema/cloudresume/tree/build'><code>build</code></a> branch.</p>
+
+    <p>Before I continue, I should also mention that if you wish to test deploying these builds without an SSL/TLS
+        certificate, you need to set <a
+                href='https://github.com/gobema/cloudresume/blob/main/cmd/web/middleware.go#L87'><code>http.Cookie.Secure</code></a>
+        to false in the <code>nosurf</code> middleware function.</p>
+
+    <h4 id='lets-review'>Let&#39;s review</h4>
+
+    <p>With the Snippetbox web application packaged and deployable, I can begin adding features.</p>
+    <p>The <a href='https://github.com/gobema/cloudresume/tree/reviews'><code>reviews</code></a> branch adds a small
+        feature that builds upon key parts of the code base. The cloud résumé challenge describes a static website with
+        a visitor counter to demonstrate interaction with a backend database. The Snippetbox design already includes a
+        backend, so I built upon that, and as a callback to the cloud résumé challenge counter, I added a review
+        submission counter. The goal of this addition is to simulate the day-to-day work of contributing to an existing
+        code base, specifically by adding a new model to the backend.</p>
+
+    <p>The
+        <a href='https://github.com/gobema/cloudresume/blob/main/migrations/sql/000004_create_reviews_table.up.sql'><code>reviews</code></a>
+        table I created for reviews has a composite key consisting of foreign key IDs from the <code>users</code> and
+        <code>snippets</code> tables. Accordingly, the <a
+                href='https://github.com/gobema/cloudresume/blob/main/cmd/web/handlers.go#L424'><code>reviewUpdatePost</code></a>
+        handler builds off the design of the existing handlers requiring both a user and snippet ID to execute. For the
+        <a href='https://github.com/gobema/cloudresume/blob/main/internal/models/reviews.go#L84'><code>‎ReviewModel.Update</code></a>
+        method, I saw an opportunity to contribute something that is not in any of the existing models. Since the amount
+        of reviewers is unknown to me and since in the next update I&#39;m going to limit the creation of accounts, some
+        reviewer accounts may need to be shared, so I created a transaction to lock the row for update in case multiple
+        reviewers are using the same login to review. The Review model also includes some mock data and a test.</p>
+
+    <h4 id='lets-sign-up'>Let&#39;s sign up</h4>
+
+    <p>The <a href='https://github.com/gobema/cloudresume/tree/owner'><code>owner</code></a> branch introduces a small
+        update to the <a
+                href='https://github.com/gobema/cloudresume/blob/main/migrations/sql/000002_create_users_table.up.sql#L7'><code>users</code></a>
+        database table, but this update provides a major change in user experience. It allows me to create two types of
+        users: reviewers and owners. Now I can control who can create posts, similar to a personal blog post, so as an
+        owner, I can limit posts to sections of my résumé for review.</p>
+
+    <p>The objectives I want to achieve with this change are</p>
+
+    <ul>
+        <li>access to the signup page to create an owner during an initial deployment,</li>
+        <li>access to the signup page by an owner to create reviewers,</li>
+        <li>access to only the login page if not logged in,</li>
+        <li>no access to the signup and create page by a reviewer.</li>
+    </ul>
+
+    <p>To implement this change, I needed to make several updates to the code base.</p>
+
+    <p>In the Users model, I added the <a
+                href='https://github.com/gobema/cloudresume/blob/main/internal/models/users.go#L33'><code>Owner</code></a>
+        boolean and updated and created methods for the new feature. From here, I was able to rely on the existing
+        pattern from the authentication feature, so I retraced a clear path that is the core of web application design:
+        middleware, routes, handlers, and helper functions to implement my new feature. The design of the Snippetbox
+        code base facilitated these changes. I also updated existing tests and mock data.</p>
+
+    <h4 id='about-the-cloud-résumé-and-technical-debt'>About the cloud résumé and technical debt</h4>
+
+    <p>Finally, the changes in the <a
+                href='https://github.com/gobema/cloudresume/tree/cloudresume'><code>cloudresume</code></a> branch bring
+        us recursively to this <a href='#about-the-cloud-résumé-and-technical-debt'>About</a> page. Besides a few minor
+        textual changes to transition from a Snippetbox to a Cloud Résumé, the About page is the main addition to the
+        <code>cloudresume</code> branch.</p>
+
+    <p>The original cloud résumé challenge included a blog post as a requirement. I&#39;ve written that story here. This
+        is my first time working with AWS CDK, TypeScript, and GitHub Actions, and I worked through some interesting
+        challenges.</p>
+
+    <p>When I was first prototyping changes to the Snippetbox code locally, I finished by renaming instances of <code>snippet</code>
+        to <code>section</code> in the code base and database. I left these and a few other Snippetbox details unchanged
+        in the version I&#39;m sharing with you now as minor technical debt. I think technical debt is a fascinating
+        topic, and I enjoy talking about it.</p>
+
+    <p>Otherwise, I&#39;d like to thank you for your time, and once again, I&#39;d like to gratefully mention the books
+        <a href='https://lets-go.alexedwards.net/'>Let&#39;s Go</a> and <a
+                href='https://lets-go-further.alexedwards.net/'>Let&#39;s Go Further</a> by Alex Edwards. This project
+        would not have been possible without the Snippetbox code base from <em>Let&#39;s Go</em> and all that I have
+        learned about Go from both books.</p>
 {{end}}
