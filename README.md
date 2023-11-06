@@ -1,23 +1,15 @@
-# Owner
+# Cloud Resume
 
-The `owner` branch introduces a small update to the `users` database table, but this update provides a major change in
-user experience. It allows me to create two types of users: reviewers and owners. Now I can control who can create
-posts, similar to a personal blog post, so as an owner, I can limit posts to sections of my résumé for review.
+The `cloudresume` branch has a major update to the About page as well as a few minor textual changes to transition from
+a Snippetbox to a Cloud Résumé.
 
-The objectives I want to achieve with this change:
+The original [cloud résumé challenge](https://cloudresumechallenge.dev/docs/the-challenge/aws/) included a blog post as
+one of the requirements. I've written that story and added it to the About page of the web app. This is my first time
+working with AWS CDK, TypeScript, and GitHub Actions, and I ran into some interesting challenges along the way.
 
-* access to the signup page to create an owner during an initial deployment
-* access to the signup page by an owner to create reviewers
-* access to only the login page if not logged in
-* no access to the signup and create page by a reviewer
+As I write in the About page, my goal was a personal variation of the cloud résumé challenge. I chose to emphasize
+day-to-day work on an existing code base and to produce a workflow that allowed me to deploy and destroy an application.
 
-To implement this change, I needed to make several updates to the code base.
-
-In the Users model, I added the `Owner` boolean and updated and created methods for the new feature. From here, I'm able
-to rely on the pattern of the authentication feature, so I backtracked down a path that is the core of web application
-design: middleware, routes, handlers, and helper functions to implement my new feature. The design of the Snippetbox
-code base facilitates these changes. Finally, I updated existing tests and mock data.
-
-As with the `reviews` branch, the `owner` branch builds and runs. If you want to host your own cloud résumé based on
-this repository, the `owner` branch includes all the basic features that I wanted to add without any personal changes,
-which I will be adding to the branch `cloudresume`.
+Once again, I'd like to gratefully mention the books [Let's Go](https://lets-go.alexedwards.net/)
+and [Let's Go Further](https://lets-go-further.alexedwards.net/) by Alex Edwards. This project would not have been
+possible without the Snippetbox code base from _Let's Go_ and all that I have learned about Go from both books.
