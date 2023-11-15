@@ -1,6 +1,6 @@
 module github.com/gobema/cloudresume
 
-go 1.21.3
+go 1.21
 
 require (
 	github.com/alexedwards/scs/mysqlstore v0.0.0-20231022164606-84bd122bd881
