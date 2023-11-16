@@ -2,7 +2,6 @@ package validator
 
 import (
 	"regexp"
-	"slices"
 	"strings"
 	"unicode/utf8"
 )
@@ -52,7 +51,12 @@ func MaxChars(value string, n int) bool {
 
 // PermittedValue is a generic function that returns true if a specific value is in a list of permitted values.
 func PermittedValue[T comparable](value T, permittedValues ...T) bool {
-	return slices.Contains(permittedValues, value)
+	for i := range permittedValues {
+		if value == permittedValues[i] {
+			return true
+		}
+	}
+	return false
 }
 
 func MinChars(value string, n int) bool {
