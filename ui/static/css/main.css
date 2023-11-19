@@ -280,6 +280,14 @@ button:hover {
     float: right;
 }
 
+.about code {
+    background-color: #e4e5e7;
+    border-radius: 6px;
+    padding: .2em .4em;
+    margin: 0;
+    font-size: 85%;
+}
+
 div.flash {
     color: #FFFFFF;
     font-weight: bold;
